@@ -314,9 +314,6 @@ class NinjaRule:
                                      element.elems) >= rsp_threshold
 
 class NinjaBuildElement:
-
-    rule: NinjaRule
-
     def __init__(self, all_outputs: T.Set[str], outfilenames: ListifiedStr, rulename: str, infilenames: ListifiedStr, implicit_outs: T.Optional[T.List[str]] = None):
         self.implicit_outfilenames = implicit_outs or []
         if isinstance(outfilenames, str):
@@ -334,6 +331,7 @@ class NinjaBuildElement:
         self.elems: T.List[T.Tuple[str, T.List[str]]] = []
         self.all_outputs = all_outputs
         self.output_errors = ''
+        self.rule: NinjaRule | None = None
 
     def add_dep(self, dep: ListifiedStr) -> None:
         if isinstance(dep, list):
