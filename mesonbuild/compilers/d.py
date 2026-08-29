@@ -293,8 +293,8 @@ class DmdLikeCompilerMixin(CompilerMixinBase):
 
                 dcargs.append('-L=' + arg)
                 continue
-            elif not arg.startswith('-') and arg.endswith(('.a', '.lib')):
-                # ensure static libraries are passed through to the linker
+            elif not arg.startswith('-') and arg.endswith(('.a', '.lib', '.so')):
+                # ensure libraries are passed through to the linker
                 dcargs.append('-L=' + arg)
                 continue
             else:
