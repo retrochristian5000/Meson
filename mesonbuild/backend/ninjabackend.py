@@ -314,9 +314,6 @@ class NinjaRule:
                                      element.elems) >= rsp_threshold
 
 class NinjaBuildElement:
-
-    rule: NinjaRule
-
     def __init__(self, all_outputs: T.Set[str], outfilenames: ListifiedStr, rulename: str, infilenames: ListifiedStr, implicit_outs: T.Optional[T.List[str]] = None):
         self.implicit_outfilenames = implicit_outs or []
         if isinstance(outfilenames, str):
@@ -334,6 +331,7 @@ class NinjaBuildElement:
         self.elems: T.List[T.Tuple[str, T.List[str]]] = []
         self.all_outputs = all_outputs
         self.output_errors = ''
+        self.rule: NinjaRule | None = None
 
     def add_dep(self, dep: ListifiedStr) -> None:
         if isinstance(dep, list):
@@ -358,6 +356,9 @@ class NinjaBuildElement:
 
         if name == 'DEPFILE':
             self.elems.append((name + '_UNQUOTED', elems))
+
+    def remove_item(self, name: str) -> None:
+        self.elems[:] = [e for e in self.elems if e[0] != name]
 
     @mesonlib.lazy_property
     def _should_use_rspfile(self) -> bool:
@@ -3390,7 +3391,12 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
                     result += c
                 return result
             element.add_item('CUDA_ESCAPED_TARGET', quote_make_target(rel_obj))
+        element.add_item('ARGS', commands)
+
+        # NinjaRule.should_use_rspfile counts element.elems too, which will
+        # exceed the RSP threshold only after added
         if self.ninja.should_use_rspfile(element) and compiler.rsp_file_syntax() == RSPFileSyntax.NASM:
+            element.remove_item('ARGS')
             exe = compiler.get_exelist()
             # Add to commands the args created by generate_compile_rule_for().
             # commands remain separate from exelist because they must stay
@@ -3409,8 +3415,6 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
             cmd_type = f' (wrapped by meson {reason})' if reason else ''
             element.add_item('COMMAND', meson_exe_cmd)
             element.add_item('description', f'Compiling {compiler.get_display_language()} object {rel_obj}{cmd_type}')
-        else:
-            element.add_item('ARGS', commands)
 
         self.add_dependency_scanner_entries_to_element(target, compiler, element, src)
         self.add_build(element)
