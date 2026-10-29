@@ -243,7 +243,7 @@ class PackageDefinition:
 
     @staticmethod
     def from_wrap_file(filename: str, subproject: SubProject = mesonlib.ROOT_SUBPROJECT) -> PackageDefinition:
-        config, type_, values = PackageDefinition._parse_wrap(filename)
+        config, type_, values, wrap_text = PackageDefinition._parse_wrap(filename)
         if 'diff_files' in values:
             FeatureNew('Wrap files with diff_files', '0.63.0').use(subproject)
         if 'patch_directory' in values:
@@ -290,17 +290,23 @@ class PackageDefinition:
             else:
                 mlog.deprecation(f'WrapDB v1 is deprecated, updated using `meson wrap update {name}`')
 
-        with open(filename, 'r', encoding='utf-8') as file:
-            wrap.wrapfile_hash = hashlib.sha256(file.read().encode('utf-8')).hexdigest()
+        # The checksum and parsed revision must describe the same UTF-8 text.
+        # Reading the file again here can pair an old wrap revision with a
+        # checksum from a concurrent source update.
+        wrap.wrapfile_hash = hashlib.sha256(wrap_text.encode('utf-8')).hexdigest()
 
         return wrap
 
     @staticmethod
-    def _parse_wrap(filename: str) -> T.Tuple[configparser.ConfigParser, WrapType, T.Dict[str, str]]:
+    def _parse_wrap(filename: str) -> T.Tuple[configparser.ConfigParser, WrapType, T.Dict[str, str], str]:
         try:
+            # Read the wrap once with universal newline translation (exactly
+            # the text Meson historically hashes), then parse that snapshot.
+            with open(filename, 'r', encoding='utf-8') as file:
+                wrap_text = file.read()
             config = configparser.ConfigParser(interpolation=None)
-            config.read(filename, encoding='utf-8')
-        except configparser.Error as e:
+            config.read_string(wrap_text, source=filename)
+        except (configparser.Error, OSError) as e:
             raise WrapException(f'Failed to parse {filename}: {e!s}')
         if len(config.sections()) < 1:
             raise WrapException(f'Missing sections in {filename}')
@@ -311,7 +317,7 @@ class PackageDefinition:
         if type_ not in tuple(WrapType):
             raise WrapException(f'Unknown wrap type {type_!r}')
         values = dict(config[wrap_section])
-        return config, WrapType(type_), values
+        return config, WrapType(type_), values, wrap_text
 
     def parse_provide_section(self, config: configparser.ConfigParser) -> None:
         if config.has_section('provides'):
