@@ -981,7 +981,10 @@ class Resolver:
     def restore_existing_patch_directory(self) -> None:
         """Restore missing wrap-provided files without altering existing source."""
         patch_name = self.wrap.values['patch_directory']
-        src_root = Path(self.wrap.filesdir) / patch_name
+        patch_path = Path(patch_name)
+        if patch_path.is_absolute() or '..' in patch_path.parts:
+            raise WrapException(f'Unsafe patch directory path: {patch_name}')
+        src_root = Path(self.wrap.filesdir) / patch_path
         dst_root = Path(self.dirname)
         if src_root.is_symlink() or not src_root.is_dir():
             raise WrapException(f'patch directory does not exist or is unsafe: {patch_name}')
