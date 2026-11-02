@@ -11,6 +11,7 @@ import urllib.error
 import urllib.parse
 import os
 import hashlib
+import filecmp
 import shutil
 import tempfile
 import stat
@@ -624,6 +625,10 @@ class Resolver:
         if os.path.exists(self.dirname):
             if not os.path.isdir(self.dirname):
                 raise WrapException('Path already exists but is not a directory')
+            if not has_buildfile() and 'patch_directory' in self.wrap.values:
+                # A pre-existing checkout may contain unpatched upstream source.
+                # This is not a download: restore only absent patch files.
+                self.restore_existing_patch_directory()
         else:
             # Check first if we have the extracted directory in our cache. This can
             # happen for example when MESON_PACKAGE_CACHE_DIR=/usr/share/cargo/registry
@@ -972,6 +977,44 @@ class Resolver:
             self.check_hash(what, path.as_posix(), hash_required=False)
 
             return path.as_posix()
+
+    def restore_existing_patch_directory(self) -> None:
+        """Restore missing wrap-provided files without altering existing source."""
+        patch_name = self.wrap.values['patch_directory']
+        src_root = Path(self.wrap.filesdir) / patch_name
+        dst_root = Path(self.dirname)
+        if src_root.is_symlink() or not src_root.is_dir():
+            raise WrapException(f'patch directory does not exist or is unsafe: {patch_name}')
+        if dst_root.is_symlink():
+            raise WrapException(f'Cannot patch symlinked subproject directory: {self.dirname}')
+
+        missing: T.List[T.Tuple[Path, Path]] = []
+        for src_dir, dirs, filenames in os.walk(src_root):
+            dst_dir = dst_root / Path(src_dir).relative_to(src_root)
+            if dst_dir.is_symlink() or (dst_dir.exists() and not dst_dir.is_dir()):
+                raise WrapException(f'Cannot restore wrap files into {dst_dir}')
+            for directory in dirs:
+                if (Path(src_dir) / directory).is_symlink():
+                    raise WrapException(f'Cannot restore symlinked wrap patch directory: {directory}')
+            for filename in filenames:
+                src_file = Path(src_dir) / filename
+                dst_file = dst_dir / filename
+                if src_file.is_symlink() or not src_file.is_file():
+                    raise WrapException(f'Cannot restore symlinked wrap patch file: {src_file}')
+                if dst_file.is_symlink() or (dst_file.exists() and
+                    (not dst_file.is_file() or
+                     not filecmp.cmp(src_file, dst_file, shallow=False))):
+                    raise WrapException(
+                        f'Existing subproject file differs from wrap patch: {dst_file}; '
+                        'preserving local changes')
+                if not dst_file.exists():
+                    missing.append((src_file, dst_file))
+
+        # Check all conflicts before creating any file. Do not overwrite local
+        # changes or replace an existing checkout with a new Git clone.
+        for src_file, dst_file in missing:
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_file, dst_file, follow_symlinks=False)
 
     def apply_patch(self, packagename: str) -> None:
         if 'patch_filename' in self.wrap.values and 'patch_directory' in self.wrap.values:
