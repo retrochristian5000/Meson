@@ -87,22 +87,22 @@ class ExistingPatchDirectoryTests(unittest.TestCase):
         subprojects.mkdir()
         patch = subprojects / 'packagefiles' / 'softfloat'
         patch.mkdir(parents=True)
-        (patch / 'meson.build').write_text("project('softfloat', 'c')\\n",
+        (patch / 'meson.build').write_text("project('softfloat', 'c')\n",
                                            encoding='utf-8')
         (patch / 'meson_options.txt').write_text(
-            "option('defines', type: 'array', value: [])\\n",
+            "option('defines', type: 'array', value: [])\n",
             encoding='utf-8')
         (subprojects / 'softfloat.wrap').write_text(
-            "[wrap-git]\\n"
-            "url = https://example.invalid/softfloat.git\\n"
-            "revision = " + "a" * 40 + "\\n"
-            "patch_directory = softfloat\\n",
+            "[wrap-git]\n"
+            "url = https://example.invalid/softfloat.git\n"
+            "revision = " + "a" * 40 + "\n"
+            "patch_directory = softfloat\n",
             encoding='utf-8')
         checkout = subprojects / 'softfloat'
         checkout.mkdir()
         (checkout / 'source').mkdir()
         (checkout / 'source' / 'original.c').write_text(
-            '/* keep the original source */\\n', encoding='utf-8')
+            '/* keep the original source */\n', encoding='utf-8')
         return checkout
 
     def test_existing_checkout_restores_missing_build_definition(self):
@@ -118,7 +118,7 @@ class ExistingPatchDirectoryTests(unittest.TestCase):
             self.assertTrue((checkout / 'meson_options.txt').is_file())
             self.assertEqual(
                 (checkout / 'source' / 'original.c').read_text(),
-                '/* keep the original source */\\n')
+                '/* keep the original source */\n')
             marker = checkout / '.meson-subproject-wrap-hash.txt'
             self.assertTrue(marker.is_file())
             self.assertEqual(marker.read_text().strip(),
@@ -133,19 +133,19 @@ class ExistingPatchDirectoryTests(unittest.TestCase):
             root = Path(tmp)
             checkout = self.make_source(root)
             option = checkout / 'meson_options.txt'
-            option.write_text('custom local options\\n', encoding='utf-8')
+            option.write_text('custom local options\n', encoding='utf-8')
             resolver = Resolver(str(root), 'subprojects',
                                 wrap_mode=WrapMode.nodownload)
             with self.assertRaisesRegex(WrapException,
                                         'preserving local changes'):
                 resolver.resolve('softfloat')
-            self.assertEqual(option.read_text(), 'custom local options\\n')
+            self.assertEqual(option.read_text(), 'custom local options\n')
             self.assertFalse((checkout / 'meson.build').exists())
             self.assertFalse(
                 (checkout / '.meson-subproject-wrap-hash.txt').exists())
             self.assertEqual(
                 (checkout / 'source' / 'original.c').read_text(),
-                '/* keep the original source */\\n')
+                '/* keep the original source */\n')
 
 
 if __name__ == "__main__":
